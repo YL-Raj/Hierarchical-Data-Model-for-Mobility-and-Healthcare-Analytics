@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Node Visualization</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        .hidden {
+            display: none;
+        }
+        #visualization {
+            float: left;
+            width: 70%;
+        }
+        #nodeInfo {
+            float: right;
+            width: 25%;
+            padding: 10px;
+            border-left: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload CSV to Visualize Nodes</h1>
+    <input type="file" id="fileInput">
+    <button id="backButton" class="hidden">Back</button>
+    <div id="visualization"></div>
+    <div id="nodeInfo" class="hidden">
+        <h2>Node Information</h2>
+        <p id="nodeDetails"></p>
+    </div>
+    <script>
+        let currentLayer = 0;
+        let data = null;
+        const width = 800;
+        const height = 600;
+    
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('file', file);
+    
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(responseData => {
+                    data = responseData;
+                    currentLayer = 0;
+                    visualizeData();
+                })
+                .catch(error => console.error('Error:', error));
+            }
+        });
+    
+        document.getElementById('backButton').addEventListener('click', function() {
+            if (currentLayer > 0) {
+                currentLayer--;
+                visualizeData();
+            }
+        });
+    
+        function visualizeData() {
+            const svg = d3.select('#visualization').html('').append('svg')
+                .attr('width', width)
+                .attr('height', height);
+    
+            const nodes = [];
+            const links = [];
+    
+            // Create nodes and links based on the current layer
+            let yOffset = 50;
+            for (let i = 0; i <= currentLayer; i++) {
+                const layerNodes = data.nodeLabels[i];
+                const xOffset = (width / (layerNodes.length + 1));
+                layerNodes.forEach((label, j) => {
+                    nodes.push({ id: label, layer: i, x: xOffset * (j + 1), y: yOffset });
+                    if (i > 0) {
+                        links.push({ source: data.nodeLabels[i - 1][0], target: label });
+                    }
+                });
+                yOffset += 150; // Increase the space between layers
+            }
+    
+            // Draw nodes
+            svg.selectAll('circle')
+                .data(nodes)
+                .enter()
+                .append('circle')
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y)
+                .attr('r', 20)
+                .attr('fill', 'blue')
+                .attr('class', d => `layer-${d.layer}`)
+                .on('click', function(event, d) {
+                    if (d.layer < data.numLayers - 1) {
+                        currentLayer = d.layer + 1;
+                        visualizeData();
+                    }
+                    // Show node information
+                    document.getElementById('nodeInfo').classList.remove('hidden');
+                    document.getElementById('nodeDetails').innerText = `Node ID: ${d.id}\nLayer: ${d.layer}`;
+                });
+    
+            // Draw labels
+            svg.selectAll('text')
+                .data(nodes)
+                .enter()
+                .append('text')
+                .attr('x', d => d.x)
+                .attr('y', d => d.y - 25)
+                .attr('text-anchor', 'middle')
+                .text(d => d.id);
+    
+            // Draw links
+            svg.selectAll('line')
+                .data(links)
+                .enter()
+                .append('line')
+                .attr('x1', d => nodes.find(n => n.id === d.source).x)
+                .attr('y1', d => nodes.find(n => n.id === d.source).y)
+                .attr('x2', d => nodes.find(n => n.id === d.target).x)
+                .attr('y2', d => nodes.find(n => n.id === d.target).y)
+                .attr('stroke', 'black');
+    
+            // Show or hide the back button
+            if (currentLayer > 0) {
+                document.getElementById('backButton').classList.remove('hidden');
+            } else {
+                document.getElementById('backButton').classList.add('hidden');
+            }
+        }
+    </script>
+
+    
+</body>
+</html>
